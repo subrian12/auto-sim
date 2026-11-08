@@ -1,4 +1,4 @@
-/* Auto Sim — field canvas */
+/* Auto Simulator — field canvas */
 (function () {
   'use strict';
   const AC = (window.AC = window.AC || {});
@@ -7,6 +7,9 @@
   AC.ROBOT_COLORS = ['#6aa3d4', '#d9b25f', '#c9c3bf'];
   const BUMPER = '#1d4ed8';
   const HIT = '#ff4538';
+  // Team numbers use the 3647 bumper-style digits, slanted like the bumper lettering.
+  const NUM_FONT = "13px Num3647, Archivo, system-ui, sans-serif";
+  AC.NUM_FONT = NUM_FONT;
 
   function hexA(hex, a) {
     const n = parseInt(hex.slice(1), 16);
@@ -157,7 +160,7 @@
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = '#0d0c0c';
-        ctx.font = "600 10px 'JetBrains Mono', ui-monospace, monospace";
+        ctx.font = "italic 10px Num3647, Archivo, sans-serif";
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(String(ev.num), X, Y + 0.5);
@@ -237,18 +240,18 @@
       ctx.restore();
       // Team label: an upright tag just above the robot, so it never covers the heading arrow
       ctx.save();
-      const label = R.team || `R${R.index + 1}`;
-      ctx.font = "600 11px Inter, system-ui, sans-serif";
+      const label = R.team || R.short || `R${R.index + 1}`;
+      ctx.font = NUM_FONT;
       const tw = ctx.measureText(label).width;
       const c = Math.abs(Math.cos(pose.h));
       const sn = Math.abs(Math.sin(pose.h));
       const halfH = (L * sn + W * c) / 2; // half height of the rotated robot on screen
       const cx = this.sx(pose.x);
-      const bh = 17;
-      const bw = tw + 14;
+      const bh = 19;
+      const bw = tw + 16;
       let by = this.sy(pose.y) - halfH - 5 - bh;
       if (by < 2) by = this.sy(pose.y) + halfH + 5; // flip below near the top edge
-      this.tags.push({ R, label, x: cx - bw / 2, y: by, w: bw, h: bh, hit: o.hit, up: by < this.sy(pose.y) });
+      this.tags.push({ R, label, bumper: this.bumper || BUMPER, x: cx - bw / 2, y: by, w: bw, h: bh, hit: o.hit, up: by < this.sy(pose.y) });
       ctx.restore();
     }
   }
@@ -264,21 +267,38 @@
         t.y = t.up ? hitBox.y - t.h - 3 : hitBox.y + hitBox.h + 3;
       }
       placed.push(t);
+      // A small bumper-colored tag with the team number,
+      // and a strip in the robot's color so it matches the path and timeline.
       ctx.save();
-      ctx.font = '600 11px Inter, system-ui, sans-serif';
-      ctx.fillStyle = 'rgba(14,15,17,0.92)';
-      roundRect(ctx, t.x, t.y, t.w, t.h, 3);
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetY = 1;
+      ctx.fillStyle = t.bumper;
+      roundRect(ctx, t.x, t.y, t.w, t.h, 4);
       ctx.fill();
-      ctx.strokeStyle = t.hit ? HIT : hexA(t.R.color, 0.9);
-      ctx.lineWidth = 1;
-      roundRect(ctx, t.x + 0.5, t.y + 0.5, t.w - 1, t.h - 1, 3);
-      ctx.stroke();
+      ctx.shadowColor = 'transparent';
+      ctx.fillStyle = 'rgba(255,255,255,0.10)'; // fabric highlight on the top half
+      roundRect(ctx, t.x + 1, t.y + 1, t.w - 2, t.h / 2 - 1, 3);
+      ctx.fill();
       ctx.fillStyle = t.R.color;
-      ctx.fillRect(t.x + 1, t.y + 1, 3, t.h - 2);
-      ctx.fillStyle = '#eef0f2';
+      ctx.fillRect(t.x + 3, t.y + t.h - 3, t.w - 6, 2);
+      if (t.hit) {
+        ctx.strokeStyle = HIT;
+        ctx.lineWidth = 2;
+        roundRect(ctx, t.x - 1, t.y - 1, t.w + 2, t.h + 2, 5);
+        ctx.stroke();
+      }
+      ctx.font = NUM_FONT;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(t.label, t.x + t.w / 2 + 1.5, t.y + t.h / 2 + 0.5);
+      ctx.translate(t.x + t.w / 2, t.y + t.h / 2 - 0.5);
+      ctx.transform(1, 0, -0.2, 1, 0, 0); // slant like the bumper lettering
+            ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.strokeText(t.label, 0, 0);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(t.label, 0, 0);
       ctx.restore();
     }
   };

@@ -1,4 +1,4 @@
-/* Auto Sim — live sessions. One device starts a session and gets a short code; other
+/* Auto Simulator — live sessions. One device starts a session and gets a short code; other
  * teams join with the code (or the invite link) from their own laptops. Devices connect
  * directly to each other (WebRTC via the free PeerJS service), so there are no accounts
  * and no server to run. The device that started the session relays every change to

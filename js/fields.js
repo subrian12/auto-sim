@@ -1,4 +1,4 @@
-/* Auto Sim — field definitions (WPILib blue-origin coordinates, metres).
+/* Auto Simulator — field definitions (WPILib blue-origin coordinates, metres).
  * 2024 and 2026 images come from AdvantageScope's field assets (top-down renders shared on
  * Chief Delphi); 2025 is the official WPILib image. redSide = image is drawn from the red side. */
 (function () {

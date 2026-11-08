@@ -1,4 +1,4 @@
-/* Auto Sim — per-robot file library: parses Choreo + PathPlanner project files */
+/* Auto Simulator — per-robot file library: parses Choreo + PathPlanner project files */
 (function () {
   'use strict';
   const AC = (window.AC = window.AC || {});

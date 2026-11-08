@@ -1,4 +1,4 @@
-/* Auto Sim — PathPlanner .path -> time-parameterised trajectory.
+/* Auto Simulator — PathPlanner .path -> time-parameterised trajectory.
  *
  * PathPlanner stores Bézier control points, not timed samples, so we generate a
  * profile: curvature-limited max speed, rotation-rate limit, constraint zones,

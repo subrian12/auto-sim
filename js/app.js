@@ -1,4 +1,4 @@
-/* Auto Sim — app controller */
+/* Auto Simulator — app controller */
 (function () {
   'use strict';
   const AC = window.AC;
@@ -12,13 +12,15 @@
 
   /** Each robot runs a list of steps in order: {kind:'traj'|'path', name} or {kind:'wait', time, label}. */
   function makeRobot(i) {
-    return { index: i, color: AC.ROBOT_COLORS[i], team: '', lib: new AC.Library(), steps: [], delay: 0, footprint: { ...DEFAULT_FP }, footprintFromFile: '', mirror: false, base: null, routine: null };
+    return { index: i, color: AC.ROBOT_COLORS[i], team: '', lib: new AC.Library(), steps: [], delay: 0, footprint: { ...DEFAULT_FP }, footprintFromFile: '', mirror: false, options: [], base: null, routine: null };
   }
 
   const state = { fieldId: '2026', alliance: 'blue', robots: [0, 1, 2].map(makeRobot), time: 0, playing: false, events: [], T: 20 };
   const field = () => AC.fields.get(state.fieldId);
   const loaded = () => state.robots.filter((R) => R.routine && R.routine.valid);
-  const rname = (i) => state.robots[i].team || `Robot ${i + 1}`;
+  // Robots are named by driver station, like the field displays: Blue 1, Blue 2, Blue 3.
+  const station = (i) => `${state.alliance === 'red' ? 'Red' : 'Blue'} ${i + 1}`;
+  const rname = (i) => state.robots[i].team || station(i);
 
   /** Tell the live session (if any) that this device changed robot i (or the field, i = -1). */
   const changed = (i) => AC.live && AC.live.send(i);
@@ -111,30 +113,49 @@
 
   /* ---------------- Robot cards ---------------- */
 
+  // Which robot sections are expanded (the first one starts open).
+  const openCards = new Set([0]);
+  function setOpen(i, open) {
+    if (open) openCards.add(i);
+    else openCards.delete(i);
+    const el = $(`.robot[data-i="${i}"]`);
+    if (el) el.classList.toggle('open', open);
+  }
+
   function buildCards() {
     $('#robots').innerHTML = state.robots
       .map(
         (R, i) => `
-      <div class="robot" data-i="${i}" style="--c:${R.color}">
-        <div class="robot-head">
-          <span class="dot"></span><span class="rname">Robot ${i + 1}</span>
-          <input class="team" placeholder="Team #" maxlength="8" aria-label="Team number for robot ${i + 1}">
-          <button class="icon-btn act-clear" title="Remove this robot's files">✕</button>
-        </div>
-        <div class="drop">
-          <div class="drop-main">Drop auto files or a folder here</div>
-          <div class="drop-btns"><button class="btn sm act-files">Choose files</button><button class="btn sm act-dir">Choose folder</button></div>
+      <section class="robot${openCards.has(i) ? ' open' : ''}" data-i="${i}" style="--c:${R.color}">
+        <div class="robot-head" title="Show or hide this robot's settings">
+          <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="station"></span><span class="swatch" title="Path color"></span>
+          <input class="team" placeholder="Team" maxlength="8" aria-label="Team number for robot ${i + 1}">
+          <span class="r-sum"></span>
+          <button class="icon-btn act-clear" title="Reset this robot" aria-label="Reset robot ${i + 1}"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
         </div>
         <div class="rbody">
-          <div class="dyn"></div>
-          <div class="params">
-            <label class="num-field">Start delay <span class="inputs"><input type="number" class="num in-delay" min="0" step="0.1"> s</span></label>
-            <div class="num-field">Bumper size (L × W) <span class="inputs"><input type="number" class="num in-len" min="10" step="0.5" aria-label="Bumper length"> × <input type="number" class="num in-wid" min="10" step="0.5" aria-label="Bumper width"> in</span></div>
-          </div>
-          <label class="check"><input type="checkbox" class="in-mirror"> Mirror left ↔ right</label>
-          <div class="src-note"></div>
+        <div class="row files-row">
+          <span class="row-label" title="Drop files or a folder anywhere on this robot">Files</span>
+          <span class="files-info"></span>
+          <span class="files-btns"><button class="btn sm act-files">Files…</button><button class="btn sm act-dir">Folder…</button></span>
         </div>
-      </div>`
+        <div class="dyn"></div>
+        <div class="row">
+          <label class="row-label" for="dl${i}">Start delay</label>
+          <span class="inputs"><input type="number" id="dl${i}" class="num in-delay" min="0" step="0.1"><span class="unit">s</span></span>
+        </div>
+        <div class="row">
+          <span class="row-label">Bumpers</span>
+          <span class="inputs"><input type="number" class="num in-len" min="10" step="0.5" aria-label="Bumper length"><span class="unit">×</span><input type="number" class="num in-wid" min="10" step="0.5" aria-label="Bumper width"><span class="unit">in</span></span>
+        </div>
+        <div class="src-note"></div>
+        <div class="row">
+          <span class="row-label">Mirror</span>
+          <label class="check"><input type="checkbox" class="in-mirror"> Flip left ↔ right</label>
+        </div>
+        </div>
+      </section>`
       )
       .join('');
     state.robots.forEach((R) => bindCard(R));
@@ -147,6 +168,10 @@
       update(rebuild);
       changed(i);
     };
+    $('.robot-head', el).addEventListener('click', (e) => {
+      if (e.target.closest('input, button')) return;
+      setOpen(i, !openCards.has(i));
+    });
     $('.team', el).addEventListener('input', (e) => {
       R.team = e.target.value.trim();
       edited(false);
@@ -183,6 +208,10 @@
       if (t.classList.contains('sel-auto')) {
         if (!t.value) return;
         R.steps = stepsFromAuto(R.lib.autos.get(t.value));
+      } else if (t.classList.contains('add-sel')) {
+        if (!t.value) return;
+        const k = t.value.indexOf(':');
+        R.steps.push({ kind: t.value.slice(0, k), name: t.value.slice(k + 1) });
       } else if (t.classList.contains('seq-sel')) {
         const k = t.value.indexOf(':');
         R.steps[+t.dataset.s] = { kind: t.value.slice(0, k), name: t.value.slice(k + 1) };
@@ -199,19 +228,11 @@
       const b = e.target.closest('button');
       if (!b) return;
       if (b.classList.contains('seq-rm')) R.steps.splice(+b.dataset.s, 1);
-      else if (b.classList.contains('add-traj')) R.steps.push({ kind: b.dataset.kind, name: b.dataset.name });
       else if (b.classList.contains('add-stop')) R.steps.push({ kind: 'wait', time: 1, label: '' });
       else if (b.classList.contains('seq-clear')) R.steps = [];
       else return;
       edited(true);
     });
-    // Search box for teams with lots of trajectories
-    dyn.addEventListener('input', (e) => {
-      if (!e.target.classList.contains('add-filter')) return;
-      const q = e.target.value.trim().toLowerCase();
-      dyn.querySelectorAll('.add-traj').forEach((b) => (b.hidden = q && !b.dataset.name.toLowerCase().includes(q)));
-    });
-
     // Drag a step row to reorder it
     let dragFrom = -1;
     dyn.addEventListener('dragstart', (e) => {
@@ -284,44 +305,46 @@
   function stepsHtml(R) {
     const e = R.lib.entries();
     let html = '';
-    if (e.autos.length) html += `<label class="stack">Start from a PathPlanner auto<select class="sel sel-auto"><option value="">Choose…</option>${e.autos.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select></label>`;
+    if (e.autos.length) html += `<div class="row"><label class="row-label">PP auto</label><select class="sel sel-auto"><option value="">Load an auto…</option>${e.autos.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select></div>`;
 
-    html += `<div class="steps-head"><span>Auto order</span>${R.steps.length ? '<button class="link seq-clear">Clear</button>' : ''}</div><div class="steps">`;
-    if (!R.steps.length) html += '<div class="steps-empty">Click trajectories below to add them in order.</div>';
     let total = 0;
+    let rows = '';
     R.steps.forEach((st, s) => {
       const t = stepTime(R, st);
       total += t || 0;
-      const handle = '<span class="grip" title="Drag to reorder">⋮⋮</span>';
-      const rm = `<button class="icon-btn seq-rm" data-s="${s}" title="Remove">✕</button>`;
+      const idx = `<span class="step-idx" title="Drag to reorder">${s + 1}</span>`;
+      const rm = `<button class="icon-btn seq-rm" data-s="${s}" title="Remove" aria-label="Remove step"><svg viewBox="0 0 16 16"><path d="M5 5l6 6M11 5l-6 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>`;
       if (st.kind === 'wait') {
-        html += `<div class="step stop" draggable="true" data-s="${s}">${handle}<span class="step-name">${st.label ? esc(st.label) : 'Stop'}</span><span class="stop-time"><input type="number" class="num seq-wait" data-s="${s}" min="0" step="0.1" value="${st.time}" aria-label="Stop seconds"> s</span>${rm}</div>`;
+        rows += `<div class="step stop" draggable="true" data-s="${s}">${idx}<span class="step-name">${st.label ? esc(st.label) : 'Stop'}</span><span class="stop-time"><input type="number" class="num seq-wait" data-s="${s}" min="0" step="0.1" value="${st.time}" aria-label="Stop seconds"></span><span class="unit">s</span>${rm}</div>`;
       } else {
         const missing = t == null;
-        html += `<div class="step${missing ? ' missing' : ''}" draggable="true" data-s="${s}">${handle}<span class="step-name" title="${esc(st.name)}">${esc(st.name)}</span><span class="step-time">${missing ? 'missing' : t.toFixed(2) + ' s'}</span>${rm}</div>`;
+        rows += `<div class="step${missing ? ' missing' : ''}" draggable="true" data-s="${s}">${idx}<span class="step-name" title="${esc(st.name)}">${esc(st.name)}</span><span class="step-time">${missing ? 'missing' : t.toFixed(2)}</span><span class="unit">${missing ? '' : 's'}</span>${rm}</div>`;
       }
     });
-    html += '</div>';
-    if (R.steps.length) html += `<div class="steps-total">Total ${total.toFixed(2)} s</div>`;
+    html += `<div class="steps-head"><span class="row-label">Sequence</span>${R.steps.length ? `<span class="steps-total">${total.toFixed(2)} s</span><button class="link seq-clear">Clear</button>` : ''}</div>`;
+    html += `<div class="steps">${rows || '<div class="steps-empty">Empty. Add a trajectory below.</div>'}</div>`;
 
-    const items = e.trajs.map((n) => ['traj', n]).concat(e.paths.map((n) => ['path', n]));
-    html += '<div class="add-box"><div class="add-head">Add to auto</div>';
-    if (items.length > 10) html += '<input type="text" class="add-filter" placeholder="Search trajectories" aria-label="Search trajectories">';
-    html += '<div class="add-list">';
-    html += items.map(([k, n]) => `<button class="add-traj" data-kind="${k}" data-name="${esc(n)}" title="Add ${esc(n)}">${esc(n)}</button>`).join('');
-    html += '<button class="add-stop">+ Stop</button></div></div>';
+    const opt = (k, n) => `<option value="${k}:${esc(n)}">${esc(n)}</option>`;
+    let opts = '';
+    if (e.trajs.length && e.paths.length) opts = `<optgroup label="Choreo">${e.trajs.map((n) => opt('traj', n)).join('')}</optgroup><optgroup label="PathPlanner">${e.paths.map((n) => opt('path', n)).join('')}</optgroup>`;
+    else opts = e.trajs.map((n) => opt('traj', n)).join('') + e.paths.map((n) => opt('path', n)).join('');
+    html += `<div class="add-row"><select class="sel add-sel" aria-label="Add a trajectory"><option value="">Add trajectory…</option>${opts}</select><button class="btn sm add-stop">Add stop</button></div>`;
     return html;
   }
 
   function renderCard(R) {
     const el = $(`.robot[data-i="${R.index}"]`);
     const team = $('.team', el);
+    const sum = $('.r-sum', el);
+    const nTraj = R.steps.filter((st) => st.kind !== 'wait').length;
+    sum.textContent = R.lib.empty ? 'No files' : R.routine && R.routine.valid ? `${nTraj} path${nTraj === 1 ? '' : 's'} · ${(R.delay + R.routine.duration).toFixed(2)} s` : 'No sequence';
+    const stn = $('.station', el);
+    stn.textContent = station(R.index);
+    stn.classList.toggle('red', state.alliance === 'red');
     if (document.activeElement !== team) team.value = R.team;
     const hasFiles = !R.lib.empty;
-    $('.drop', el).classList.toggle('compact', hasFiles);
-    $('.act-files', el).textContent = hasFiles ? 'Add files' : 'Choose files';
-    $('.act-dir', el).textContent = hasFiles ? 'Folder' : 'Choose folder';
-    $('.drop-main', el).textContent = hasFiles ? `${R.lib.fileCount} file${R.lib.fileCount === 1 ? '' : 's'} loaded` : 'Drop auto files or a folder here';
+    $('.files-info', el).textContent = hasFiles ? `${R.lib.fileCount} loaded` : 'None';
+    $('.files-info', el).classList.toggle('none', !hasFiles);
 
     let html = '';
     if (hasFiles) {
@@ -340,8 +363,7 @@
     const w = $('.in-wid', el);
     if (document.activeElement !== l) l.value = +(R.footprint.length / U.M_PER_IN).toFixed(1);
     if (document.activeElement !== w) w.value = +(R.footprint.width / U.M_PER_IN).toFixed(1);
-    const dur = R.routine && R.routine.valid ? `Runs ${R.routine.duration.toFixed(2)} s. ` : '';
-    $('.src-note', el).textContent = dur + (R.footprintFromFile ? `Bumpers from ${R.footprintFromFile}.` : hasFiles ? 'Bumper size not in files, so check it.' : '');
+    $('.src-note', el).textContent = R.footprintFromFile ? `From ${R.footprintFromFile}` : hasFiles ? 'Default size. Not found in project files.' : '';
   }
 
   /* ---------------- Loading files ---------------- */
@@ -393,9 +415,10 @@
       if (R.lib.addFile(f.path, await f.file.text())) ok++;
     }
     applyDefaults(R);
+    if (ok) setOpen(i, true);
     update(true);
     changed(i);
-    toast(ok ? `Loaded ${ok} file${ok === 1 ? '' : 's'} into Robot ${i + 1}` : 'Those files could not be read', !ok);
+    toast(ok ? `${station(i)}: loaded ${ok} file${ok === 1 ? '' : 's'}` : 'Those files could not be read', !ok);
   }
 
   function applyDefaults(R) {
@@ -410,7 +433,7 @@
   /* ---------------- Robot data (alliance files, saved session, live sessions) ---------------- */
 
   function robotData(R) {
-    return { team: R.team, steps: R.steps, delay: R.delay, footprint: R.footprint, footprintFromFile: R.footprintFromFile, mirror: !!R.mirror, files: Object.fromEntries(R.lib.raw) };
+    return { team: R.team, steps: R.steps, delay: R.delay, footprint: R.footprint, footprintFromFile: R.footprintFromFile, mirror: !!R.mirror, options: R.options, files: Object.fromEntries(R.lib.raw) };
   }
 
   function setRobot(i, d) {
@@ -424,6 +447,7 @@
     R.steps = d.steps || (sel && sel.type === 'seq' ? sel.steps : sel && sel.type === 'auto' && R.lib.autos.has(sel.name) ? stepsFromAuto(R.lib.autos.get(sel.name)) : sel && sel.name ? [{ kind: sel.type, name: sel.name }] : []);
     R.delay = +d.delay || 0;
     R.mirror = !!d.mirror;
+    R.options = Array.isArray(d.options) ? d.options.filter((o) => o && Array.isArray(o.steps)) : [];
     applyDefaults(R);
     if (d.footprint && d.footprint.length > 0) R.footprint = d.footprint;
     R.footprintFromFile = d.footprintFromFile || '';
@@ -454,7 +478,7 @@
       } catch (e) {
         doc = null;
       }
-      if (!doc || doc.format !== 'autosim-alliance' || !Array.isArray(doc.robots)) throw new Error('not an Auto Sim alliance file');
+      if (!doc || doc.format !== 'autosim-alliance' || !Array.isArray(doc.robots)) throw new Error('not an Auto Simulator alliance file');
       if (AC.fields.list.some((f) => f.id === doc.fieldId)) state.fieldId = doc.fieldId;
       state.alliance = doc.alliance === 'red' ? 'red' : 'blue';
       syncAlliance();
@@ -489,7 +513,9 @@
   /** rebuild = files or steps changed, so routines need regenerating. */
   function update(rebuild) {
     // Always rebuild the mirrored view: it depends on the field and alliance too.
+    if (rebuild && combo.result && !combo.applying) combo.stale = true;
     for (const R of state.robots) {
+      R.short = `${state.alliance === 'red' ? 'R' : 'B'}${R.index + 1}`;
       if (rebuild || !R.base) R.base = R.lib.empty ? null : AC.buildRoutine(R.lib, { type: 'seq', steps: R.steps }, {});
       R.routine = transformed(R.base, poseTransform(R));
     }
@@ -500,7 +526,7 @@
     state.time = U.clamp(state.time, 0, state.T);
     state.robots.forEach(renderCard);
     renderResults(rs);
-    $('#empty-state').hidden = state.robots.some((R) => !R.lib.empty);
+    renderCombos();
     $('#time-total').textContent = state.T.toFixed(2);
     draw();
     save();
@@ -509,25 +535,212 @@
   function renderResults(rs) {
     const st = $('#status');
     const ev = state.events;
+    const span = `<b>${state.T.toFixed(2)}</b> s simulated`;
     if (rs.length < 2) {
       st.className = 'status idle';
-      st.innerHTML = `<div class="s-title">Waiting for autos</div><div class="s-sub">Load at least two robots.</div>`;
+      st.innerHTML = '<span class="badge">Idle</span><span class="s-text">Load two or more robots.</span>';
     } else if (ev.length) {
       st.className = 'status bad';
-      st.innerHTML = `<div class="s-title">${ev.length} collision${ev.length > 1 ? 's' : ''}</div><div class="s-sub">Click one to see it on the field.</div>`;
+      st.innerHTML = `<span class="badge">Collision</span><span class="s-text"><b>${ev.length}</b> contact${ev.length > 1 ? 's' : ''} · ${span}</span>`;
     } else {
       st.className = 'status ok';
-      st.innerHTML = `<div class="s-title">No collisions</div><div class="s-sub">The ${rs.length} autos never touch.</div>`;
+      st.innerHTML = `<span class="badge">Clear</span><span class="s-text"><b>0</b> contacts · ${span}</span>`;
     }
     const late = rs.filter((R) => R.delay + R.routine.duration > field().autoTime + 1e-6);
+    const head = ev.length ? '<div class="tbl-head ev-grid"><span>#</span><span>Robots</span><span>Time (s)</span><span>Depth</span></div>' : '';
     $('#events').innerHTML =
+      head +
       ev
         .map((e, k) => {
           const parked = e.robots.filter((r, j) => !e.moving[j]).map(rname);
-          const note = parked.length === 2 ? 'Both robots are stopped here.' : parked.length ? `${esc(parked[0])} is stopped here.` : '';
-          return `<button class="event" data-k="${k}"><span class="e-ic">${e.num}</span><span><div class="e-t">${esc(rname(e.robots[0]))} hits ${esc(rname(e.robots[1]))}</div><div class="e-m">${e.t0.toFixed(2)}–${e.t1.toFixed(2)} s · ${(e.depth / U.M_PER_IN).toFixed(1)} in overlap</div>${note ? `<div class="e-n">${note}</div>` : ''}</span></button>`;
+          const note = parked.length === 2 ? 'Both stationary' : parked.length ? `${esc(parked[0])} stationary` : '';
+          return `<button class="event ev-grid" data-k="${k}" title="Jump to this contact"><span class="e-ic">${e.num}</span><span class="e-t">${esc(rname(e.robots[0]))} × ${esc(rname(e.robots[1]))}${note ? `<span class="e-n">${note}</span>` : ''}</span><span class="e-m">${e.t0.toFixed(2)}–${e.t1.toFixed(2)}</span><span class="e-m">${(e.depth / U.M_PER_IN).toFixed(1)} in</span></button>`;
         })
-        .join('') + late.map((R) => `<div class="msg">${esc(rname(R.index))} is still driving after the ${field().autoTime} s auto period ends.</div>`).join('');
+        .join('') +
+      late.map((R) => `<div class="msg">${esc(rname(R.index))} runs past the ${field().autoTime} s autonomous period.</div>`).join('');
+  }
+
+  /* ---------------- Combinations ---------------- */
+
+  /**
+   * Every robot gets a list of candidate autos: the PathPlanner autos in its files, any
+   * sequences saved as options, and its current sequence (optionally each one mirrored).
+   * Each pair of candidates from two robots is simulated once, then a combination works
+   * when none of its pairs collide.
+   */
+  const combo = { mirrorToo: false, running: false, progress: 0, result: null, stale: false, applied: -1, applying: false };
+  const sameSteps = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const comboRobots = () => state.robots.filter((R) => !R.lib.empty);
+
+  function stepsLabel(steps) {
+    const n = steps.filter((st) => st.kind !== 'wait').map((st) => st.name);
+    if (!n.length) return 'Stops only';
+    return n.length > 3 ? `${n[0]} → … → ${n[n.length - 1]}` : n.join(' → ');
+  }
+
+  function candidates(R) {
+    const out = [];
+    const add = (name, steps) => {
+      if (steps.length && !out.some((c) => sameSteps(c.steps, steps))) out.push({ name, steps });
+    };
+    for (const n of R.lib.entries().autos) add(n, stepsFromAuto(R.lib.autos.get(n)));
+    for (const o of R.options) add(o.name, o.steps);
+    add('Current sequence', R.steps);
+    const mirrors = combo.mirrorToo ? [false, true] : [!!R.mirror];
+    return out.flatMap((c) => mirrors.map((m) => ({ ...c, mirror: m })));
+  }
+
+  const comboCount = () => {
+    const rs = comboRobots();
+    return rs.length < 2 ? 0 : rs.reduce((n, R) => n * candidates(R).length, 1);
+  };
+
+  async function runCombos() {
+    const robots = comboRobots();
+    if (robots.length < 2) return toast('Load at least two robots', true);
+    const f = field();
+    const sets = robots.map((R) =>
+      candidates(R)
+        .map((c) => {
+          let routine = null;
+          try {
+            routine = transformed(AC.buildRoutine(R.lib, { type: 'seq', steps: c.steps }, {}), poseTransform({ mirror: c.mirror }));
+          } catch (e) {
+            routine = null;
+          }
+          return { ...c, sim: { index: R.index, routine, delay: R.delay, footprint: R.footprint } };
+        })
+        .filter((c) => c.sim.routine && c.sim.routine.valid)
+    );
+    const empty = robots.find((R, r) => !sets[r].length);
+    if (empty) return toast(`${rname(empty.index)} has no auto that drives`, true);
+
+    combo.running = true;
+    combo.progress = 0;
+    renderCombos();
+    // Simulate each pair of candidates once (20 ms steps is plenty to screen combinations).
+    const hits = new Map();
+    let jobs = 0;
+    let done = 0;
+    for (let i = 0; i < sets.length; i++) for (let j = i + 1; j < sets.length; j++) jobs += sets[i].length * sets[j].length;
+    for (let i = 0; i < sets.length; i++) {
+      for (let j = i + 1; j < sets.length; j++) {
+        for (let a = 0; a < sets[i].length; a++) {
+          for (let b = 0; b < sets[j].length; b++) {
+            const n = AC.collide.analyze([sets[i][a].sim, sets[j][b].sim], f, 0.02).events.length;
+            hits.set(`${i}.${a}|${j}.${b}`, n);
+            if (++done % 15 === 0) {
+              combo.progress = done / jobs;
+              renderCombos();
+              await new Promise((r) => setTimeout(r));
+            }
+          }
+        }
+      }
+    }
+    // Every combination = one candidate per robot.
+    const list = [];
+    const pick = new Array(sets.length).fill(0);
+    for (;;) {
+      const clashes = [];
+      for (let i = 0; i < sets.length; i++) for (let j = i + 1; j < sets.length; j++) if (hits.get(`${i}.${pick[i]}|${j}.${pick[j]}`)) clashes.push([robots[i].index, robots[j].index]);
+      const time = Math.max(...pick.map((a, r) => sets[r][a].sim.delay + sets[r][a].sim.routine.duration));
+      list.push({ picks: pick.map((a, r) => ({ R: robots[r], cand: sets[r][a] })), clashes, time });
+      let r = sets.length - 1;
+      while (r >= 0 && ++pick[r] === sets[r].length) pick[r--] = 0;
+      if (r < 0) break;
+    }
+    list.sort((x, y) => x.clashes.length - y.clashes.length || x.time - y.time);
+    combo.result = { list, total: list.length, ok: list.filter((c) => !c.clashes.length).length };
+    combo.running = false;
+    combo.stale = false;
+    combo.applied = -1;
+    renderCombos();
+  }
+
+  function applyCombo(k) {
+    const c = combo.result.list[k];
+    combo.applying = true;
+    for (const { R, cand } of c.picks) {
+      R.steps = cand.steps.map((st) => ({ ...st }));
+      R.mirror = cand.mirror;
+    }
+    update(true);
+    combo.applying = false;
+    c.picks.forEach(({ R }) => changed(R.index));
+    combo.applied = k;
+    seek(0);
+    renderCombos();
+  }
+
+  const X_ICON = '<svg viewBox="0 0 16 16"><path d="M5 5l6 6M11 5l-6 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+
+  function renderCombos() {
+    const el = $('#combos');
+    if (!el) return;
+    const rs = comboRobots();
+    if (rs.length < 2) {
+      el.innerHTML = '<div class="c-note">Load two or more robots to compare every auto combination.</div>';
+      return;
+    }
+    let html = '<div class="c-robots">';
+    for (const R of rs) {
+      const base = candidates(R).length / (combo.mirrorToo ? 2 : 1);
+      html += `<div class="c-robot" style="--c:${R.color}"><span class="swatch"></span><span class="c-name">${esc(rname(R.index))}</span><span class="c-count">${base} option${base === 1 ? '' : 's'}</span><button class="link c-save" data-i="${R.index}" title="Add the current sequence to this robot's options">Save sequence</button></div>`;
+      R.options.forEach((o, k) => {
+        html += `<div class="c-opt"><span title="${esc(o.name)}">${esc(o.name)}</span><button class="icon-btn c-del" data-i="${R.index}" data-o="${k}" title="Remove option" aria-label="Remove option">${X_ICON}</button></div>`;
+      });
+    }
+    html += '</div>';
+    const n = comboCount();
+    html += `<label class="check"><input type="checkbox" class="c-mirror"${combo.mirrorToo ? ' checked' : ''}> Include mirrored variants</label>`;
+    html += combo.running
+      ? `<div class="c-progress"><span style="width:${(combo.progress * 100).toFixed(0)}%"></span></div>`
+      : `<button class="btn c-run">Run ${n} combination${n === 1 ? '' : 's'}</button>`;
+
+    const res = combo.result;
+    if (res && !combo.running) {
+      html += `<div class="c-sum ${res.ok ? 'ok' : 'bad'}">${res.ok ? `<b>${res.ok}</b> of <b>${res.total}</b> clear` : `<b>0</b> of <b>${res.total}</b> clear. Closest:`}${combo.stale ? '<span class="c-stale">Inputs changed since this run.</span>' : ''}</div><div class="c-list">`;
+      const shown = res.ok ? res.list.filter((c) => !c.clashes.length).slice(0, 40) : res.list.slice(0, 5);
+      shown.forEach((c) => {
+        const k = res.list.indexOf(c);
+        const lines = c.picks.map(({ R, cand }) => `<div class="c-line" style="--c:${R.color}"><span class="swatch"></span><span class="c-team">${esc(rname(R.index))}</span><span class="c-auto" title="${esc(cand.name)}">${esc(cand.name)}${cand.mirror ? ' <i>(mirrored)</i>' : ''}</span></div>`).join('');
+        const clash = c.clashes.map(([a, b]) => `${esc(rname(a))} × ${esc(rname(b))}`).join(', ');
+        html += `<button class="combo${k === combo.applied ? ' on' : ''}" data-k="${k}" title="Show this combination on the field">${lines}<div class="c-meta">${clash ? `<span class="c-clash">${clash}</span>` : '<span class="c-okay">Clear</span>'}<span><b>${c.time.toFixed(2)}</b> s</span></div></button>`;
+      });
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function bindCombos() {
+    const el = $('#combos');
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      if (b.classList.contains('c-run')) runCombos();
+      else if (b.classList.contains('combo')) applyCombo(+b.dataset.k);
+      else if (b.classList.contains('c-save')) {
+        const R = state.robots[+b.dataset.i];
+        if (!R.steps.length) return toast('This robot has no sequence yet', true);
+        if (R.options.some((o) => sameSteps(o.steps, R.steps))) return toast('That sequence is already saved');
+        R.options.push({ name: stepsLabel(R.steps), steps: R.steps.map((st) => ({ ...st })) });
+        renderCombos();
+        changed(R.index);
+        save();
+      } else if (b.classList.contains('c-del')) {
+        const R = state.robots[+b.dataset.i];
+        R.options.splice(+b.dataset.o, 1);
+        renderCombos();
+        changed(R.index);
+        save();
+      }
+    });
+    el.addEventListener('change', (e) => {
+      if (!e.target.classList.contains('c-mirror')) return;
+      combo.mirrorToo = e.target.checked;
+      renderCombos();
+    });
   }
 
   /* ---------------- Drawing + playback ---------------- */
@@ -576,37 +789,112 @@
 
   /* ---------------- Remember the last session ---------------- */
 
-  const save = U.debounce(() => {
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify({ fieldId: state.fieldId, alliance: state.alliance, robots: state.robots.map(robotData) }));
-    } catch (e) {
-      /* storage full or blocked: not important */
-    }
-  }, 400);
+  /**
+   * Everything (files included) is kept in the browser's IndexedDB, which holds far more
+   * than localStorage, so a refresh or reopening the page brings the whole setup back.
+   */
+  const store = {
+    db: null,
+    open() {
+      if (!this.db)
+        this.db = new Promise((res, rej) => {
+          const r = indexedDB.open('autosim', 1);
+          r.onupgradeneeded = () => r.result.createObjectStore('kv');
+          r.onsuccess = () => res(r.result);
+          r.onerror = () => rej(r.error);
+        });
+      return this.db;
+    },
+    async get(key) {
+      const db = await this.open();
+      return new Promise((res, rej) => {
+        const q = db.transaction('kv').objectStore('kv').get(key);
+        q.onsuccess = () => res(q.result);
+        q.onerror = () => rej(q.error);
+      });
+    },
+    async set(key, value) {
+      const db = await this.open();
+      return new Promise((res, rej) => {
+        const t = db.transaction('kv', 'readwrite');
+        t.objectStore('kv').put(value, key);
+        t.oncomplete = () => res();
+        t.onerror = () => rej(t.error);
+      });
+    },
+  };
 
-  function restore() {
+  /*
+   * Settings (teams, sequences, delays, alliance...) are small, so they are written to
+   * localStorage instantly on every change and survive even an immediate refresh.
+   * Path files can be many MB, so each robot's files go to IndexedDB once, when they change.
+   */
+  const META_KEY = 'autosim.v2';
+  let restoring = true; // don't overwrite the saved setup before it has been loaded
+  const savedSig = [];
+  const filesSig = (R) => [...R.lib.raw].map(([n, t]) => `${n}:${t.length}`).join('|');
+
+  function save() {
+    if (restoring) return;
+    const meta = { fieldId: state.fieldId, alliance: state.alliance, robots: state.robots.map((R) => ({ ...robotData(R), files: undefined })) };
     try {
-      const d = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
-      if (!d) return;
-      if (AC.fields.list.some((f) => f.id === d.fieldId)) state.fieldId = d.fieldId;
-      if (d.alliance === 'red') state.alliance = 'red';
-      d.robots.forEach((r, i) => setRobot(i, r));
+      localStorage.setItem(META_KEY, JSON.stringify(meta));
     } catch (e) {
-      /* ignore a broken saved session */
+      /* storage blocked */
     }
+    state.robots.forEach((R, i) => {
+      const sig = filesSig(R);
+      if (sig === savedSig[i]) return;
+      savedSig[i] = sig;
+      store.set(`files:${i}`, Object.fromEntries(R.lib.raw)).catch(() => {});
+    });
+  }
+
+  async function restore() {
+    let meta = null;
+    try {
+      meta = JSON.parse(localStorage.getItem(META_KEY) || 'null');
+    } catch (e) {
+      meta = null;
+    }
+    try {
+      if (meta && Array.isArray(meta.robots)) {
+        const files = await Promise.all([0, 1, 2].map((i) => store.get(`files:${i}`).catch(() => null)));
+        if (AC.fields.list.some((f) => f.id === meta.fieldId)) state.fieldId = meta.fieldId;
+        state.alliance = meta.alliance === 'red' ? 'red' : 'blue';
+        meta.robots.forEach((r, i) => setRobot(i, { ...r, files: files[i] || {} }));
+      } else {
+        // Older versions kept everything (files included) in one localStorage entry.
+        const d = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+        if (d && Array.isArray(d.robots)) {
+          if (AC.fields.list.some((f) => f.id === d.fieldId)) state.fieldId = d.fieldId;
+          state.alliance = d.alliance === 'red' ? 'red' : 'blue';
+          d.robots.forEach((r, i) => setRobot(i, r));
+        }
+      }
+      state.robots.forEach((R, i) => {
+        savedSig[i] = filesSig(R);
+        if (!R.lib.empty) openCards.add(i);
+      });
+    } catch (e) {
+      /* ignore a broken saved setup */
+    }
+    restoring = false;
   }
 
   /* ---------------- Init ---------------- */
 
-  function init() {
+  async function init() {
     const fs = $('#field-select');
     fs.innerHTML = AC.fields.list.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('');
-    restore();
+    await restore();
     fs.value = state.fieldId;
     buildCards();
 
     view = new AC.FieldView($('#field-canvas'));
     view.requestDraw = draw;
+    // Redraw once the number font arrives so canvas labels use it.
+    if (document.fonts) document.fonts.load(AC.NUM_FONT, '0123456789').then(() => draw()).catch(() => {});
     AC.fields.list.forEach((f) => view.image(f)); // preload every season's field image
     view.onPick = (e) => seek(e.t0);
     timeline = new AC.Timeline($('#timeline-canvas'), seek);
@@ -626,6 +914,7 @@
       update();
       changed(-1);
     });
+    bindCombos();
     $('#btn-save').addEventListener('click', saveAlliance);
     $('#btn-open').addEventListener('click', () => pick(-1, '#alliance-input'));
     $('#alliance-input').addEventListener('change', (e) => e.target.files[0] && openAlliance(e.target.files[0]));
@@ -654,7 +943,7 @@
 
     update(true);
     requestAnimationFrame(frame);
-    AC.app = { state, update, seek, loadInto, openAlliance, applyRemote, robotData, toast, stepsFromAuto };
+    AC.app = { state, combo, runCombos, update, seek, loadInto, openAlliance, applyRemote, robotData, toast, stepsFromAuto };
     if (AC.live) AC.live.init();
   }
 

@@ -1,4 +1,4 @@
-/* Auto Sim — turns a selection (PathPlanner auto / path / Choreo traj / custom chain)
+/* Auto Simulator — turns a selection (PathPlanner auto / path / Choreo traj / custom chain)
  * into a Routine: a list of timed motion segments plus timeline activities. */
 (function () {
   'use strict';

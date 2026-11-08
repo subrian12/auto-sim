@@ -1,4 +1,4 @@
-/* Auto Sim — robot footprints and collision detection */
+/* Auto Simulator — robot footprints and collision detection */
 (function () {
   'use strict';
   const AC = (window.AC = window.AC || {});

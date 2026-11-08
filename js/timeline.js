@@ -1,9 +1,10 @@
-/* Auto Sim — timeline: one lane per robot plus a collision lane. Click or drag to scrub. */
+/* Auto Simulator — timeline: one lane per robot plus a collision lane. Click or drag to scrub. */
 (function () {
   'use strict';
   const AC = (window.AC = window.AC || {});
   const U = AC.util;
-  const FONT = 'Inter, system-ui, sans-serif';
+  const FONT = "Archivo, system-ui, sans-serif";
+  const NUM = "Num3647, Archivo, sans-serif";
 
   class Timeline {
     constructor(canvas, onSeek) {
@@ -49,7 +50,7 @@
       const rulerH = 18;
       const laneH = 20;
       // Ruler, one tick per second
-      ctx.font = `10px ${FONT}`;
+      ctx.font = `italic 10px ${NUM}`;
       ctx.textBaseline = 'middle';
       ctx.textAlign = 'center';
       for (let t = 0; t <= this.T + 1e-6; t++) {
@@ -76,9 +77,9 @@
 
       // Lanes
       ctx.textAlign = 'left';
-      ctx.font = `600 10px ${FONT}`;
+      ctx.font = `600 11px ${FONT}`;
       ctx.fillStyle = '#a8a19e';
-      ctx.fillText('Hits', 8, rulerH + laneH / 2);
+      ctx.fillText('Contacts', 8, rulerH + laneH / 2);
       for (const ev of S.events) {
         const x0 = this.tx(ev.t0);
         ctx.fillStyle = '#ff4538';
@@ -87,9 +88,13 @@
       }
       S.robots.forEach((R, li) => {
         const y = rulerH + laneH * (li + 1) + 4;
-        ctx.font = `600 11px ${FONT}`;
+        ctx.save();
+        ctx.font = `12px ${NUM}`;
         ctx.fillStyle = R.color;
-        ctx.fillText(R.team || `R${R.index + 1}`, 8, y + laneH / 2);
+        ctx.translate(8, y + laneH / 2);
+        ctx.transform(1, 0, -0.2, 1, 0, 0);
+        ctx.fillText(R.team || R.short || `R${R.index + 1}`, 0, 0);
+        ctx.restore();
         ctx.fillStyle = 'rgba(168,161,158,0.06)';
         ctx.fillRect(this.padL, y + 2, w - this.padL - this.padR, laneH - 4);
         for (const a of R.routine.activities) {
@@ -114,7 +119,7 @@
             ctx.rect(x0, y, x1 - x0 - 3, laneH);
             ctx.clip();
             ctx.fillStyle = '#0d0c0c';
-            ctx.font = `600 10px ${FONT}`;
+            ctx.font = `600 11px ${FONT}`;
             ctx.fillText(a.label, x0 + 5, y + laneH / 2 + 0.5);
             ctx.restore();
           }

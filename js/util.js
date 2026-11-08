@@ -1,4 +1,4 @@
-/* Auto Sim — shared math + formatting helpers */
+/* Auto Simulator — shared math + formatting helpers */
 (function () {
   'use strict';
   const AC = (window.AC = window.AC || {});
