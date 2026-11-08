@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auto Sim</title>
+<meta name="description" content="Run three FRC autonomous routines (PathPlanner or Choreo) at the same time and find robot collisions. Made by FRC Team 3647.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-name">Auto Sim</span>
+    <span class="brand-sub">FRC 3647 Millennium Falcons</span>
+  </div>
+  <div class="top-controls">
+    <span id="live-actions">
+      <button class="btn" id="btn-live-start">Start session</button>
+      <button class="btn" id="btn-live-join">Join session</button>
+    </span>
+    <span class="live-bar" id="live-bar" hidden>
+      <span class="live-dot"></span><span id="live-status"></span>
+      <button class="link" id="btn-live-copy">Copy invite link</button>
+      <button class="link" id="btn-live-leave">Leave</button>
+    </span>
+    <span class="sep"></span>
+    <label class="ctl"><span>Field</span><select id="field-select"></select></label>
+    <div class="seg" id="alliance-seg" role="group" aria-label="Alliance"><button data-v="blue">Blue</button><button data-v="red">Red</button></div>
+    <span class="sep"></span>
+    <button class="btn" id="btn-open">Open alliance file</button>
+    <button class="btn primary" id="btn-save">Save alliance file</button>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="panel robots" aria-label="Robots">
+    <div class="panel-title">Robots</div>
+    <div class="panel-body" id="robots"></div>
+  </aside>
+
+  <section class="stage">
+    <div class="field-wrap">
+      <canvas id="field-canvas"></canvas>
+      <div class="empty-state" id="empty-state">
+        <div class="empty-card">
+          <h2>Will your alliance's autos collide?</h2>
+          <ol>
+            <li>Drop each team's auto files on a robot on the left. A whole <code>deploy</code> folder works.</li>
+            <li>Put each robot's trajectories in order and add stops for shooting or intaking.</li>
+            <li>Press play. Numbered markers show where robots hit.</li>
+          </ol>
+          <p>Working with other teams? Click <b>Start session</b> and send them the code. Each team loads its own robot from its own laptop.</p>
+        </div>
+      </div>
+    </div>
+    <div class="transport">
+      <button class="tbtn" id="btn-start" title="Back to start"><svg viewBox="0 0 20 20"><path d="M5 4v12M16 4l-8 6 8 6z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+      <button class="tbtn play" id="btn-play" title="Play / pause (Space)">
+        <svg class="i-play" viewBox="0 0 20 20"><path d="M6 4l10 6-10 6z" fill="currentColor"/></svg>
+        <svg class="i-pause" viewBox="0 0 20 20"><rect x="5" y="4" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="11.5" y="4" width="3.5" height="12" rx="1" fill="currentColor"/></svg>
+      </button>
+      <div class="time-readout"><span id="time-now">0.00</span><span class="dim"> / <span id="time-total">20.00</span> s</span></div>
+    </div>
+    <div class="timeline-wrap"><canvas id="timeline-canvas"></canvas></div>
+  </section>
+
+  <aside class="panel results" aria-label="Results">
+    <div class="panel-title">Collisions</div>
+    <div class="status" id="status"></div>
+    <div class="events" id="events"></div>
+  </aside>
+</main>
+
+<dialog id="dlg-join" class="dialog">
+  <form id="join-form">
+    <h2>Join a live session</h2>
+    <p>Enter the 4-character code from the team that started the session.</p>
+    <input type="text" id="join-code" maxlength="4" autocomplete="off" spellcheck="false" placeholder="ABCD" required>
+    <div class="dialog-actions"><button class="btn" type="button" id="join-cancel">Cancel</button><button class="btn primary" type="submit">Join</button></div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="file-input" multiple hidden accept=".traj,.chor,.path,.auto,.json,.autosim">
+<input type="file" id="dir-input" webkitdirectory multiple hidden>
+<input type="file" id="alliance-input" accept=".autosim" hidden>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="js/util.js"></script>
+<script src="js/fields.js"></script>
+<script src="js/ppgen.js"></script>
+<script src="js/library.js"></script>
+<script src="js/routine.js"></script>
+<script src="js/collision.js"></script>
+<script src="js/render.js"></script>
+<script src="js/timeline.js"></script>
+<script src="js/live.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
